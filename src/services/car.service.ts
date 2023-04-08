@@ -4,7 +4,10 @@ import { Session } from '../entities/session.entity';
 import { Repository } from 'typeorm';
 import { Car } from '../entities/car.entity';
 import { getDatesDifference } from '../utils/getDatesDifference';
-import { DAY_COST, MAX_BOOKING_PERIOD } from '../controllers/constants';
+import { DAY_COST, MAX_BOOKING_PERIOD } from '../constants';
+import { getBookingPrice } from '../utils/getBookingPrice';
+import { CreateSessionDto } from '../dto/create-session.dto';
+import { checkIsWeekendDay } from '../utils/checkIsWeekendDay';
 
 @Injectable()
 export class CarService {
@@ -28,8 +31,7 @@ export class CarService {
     return this.carRepository.find();
   }
 
-  async checkCarAvailable(number: string): Promise<any> {
-    console.log('here');
+  async checkCarAvailable(number: string): Promise<Car> {
     const car = await this.carRepository.findOneBy({ number });
 
     if (!car) {
@@ -45,13 +47,36 @@ export class CarService {
     return car;
   }
 
-  async getCarPrice(startDate: string, endDate: string): Promise<any> {
-    const days = getDatesDifference(startDate, endDate);
-    let price = 0;
+  async getCarPrice(startDate: string, endDate: string): Promise<number> {
+    return getBookingPrice(new Date(startDate), new Date(endDate));
+  }
 
-    console.log(days);
+  async createBookingSession(body: CreateSessionDto): Promise<Session> {
+    const startDate = new Date(body.startDate);
+    const endDate = new Date(body.endDate);
 
-    if (days > MAX_BOOKING_PERIOD)
+    const car = await this.carRepository.findOneBy({ number: body.carNumber });
+
+    if (checkIsWeekendDay(startDate) || checkIsWeekendDay(endDate))
+      throw new HttpException(
+        {
+          status: HttpStatus.BAD_REQUEST,
+          error: 'The first and last day of booking cannot fall on weekend day',
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+
+    if (!car) {
+      throw new HttpException(
+        {
+          status: HttpStatus.NOT_FOUND,
+          error: 'There is no car with this number',
+        },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    if (getDatesDifference(startDate, endDate) > MAX_BOOKING_PERIOD) {
       throw new HttpException(
         {
           status: HttpStatus.BAD_REQUEST,
@@ -59,17 +84,16 @@ export class CarService {
         },
         HttpStatus.BAD_REQUEST,
       );
-
-    for (let i = 1; i <= days; i++) {
-      if (i < 5) price = price + DAY_COST;
-
-      if (i < 10 && i >= 5) price = price + DAY_COST * 0.95;
-
-      if (i < 18 && i >= 10) price = price + DAY_COST * 0.9;
-
-      if (i < 30 && i >= 18) price = price + DAY_COST * 0.85;
     }
 
-    return price;
+    const session = new Session();
+
+    session.startDate = startDate;
+    session.endDate = endDate;
+    session.carNumber = body.carNumber;
+
+    await this.sessionRepository.save(session);
+
+    return session;
   }
 }

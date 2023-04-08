@@ -7,6 +7,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { CreateSessionDto } from '../dto/create-session.dto';
 
 @ApiBearerAuth()
 @ApiTags('Main service operations')
@@ -27,7 +28,7 @@ export class CarController {
   @ApiNotFoundResponse({
     description: 'A car with the specified ID was not found.',
   })
-  @Get('id/:id')
+  @Get('check/:id')
   isAvailableCar(@Param('id') id: string) {
     return this.CarService.checkCarAvailable(id);
   }
@@ -59,8 +60,9 @@ export class CarController {
     type: Boolean,
   })
   @Post()
-  createBookingSession(@Body() body) {
-    return body;
+  createBookingSession(@Body() body: CreateSessionDto) {
+    console.log(body);
+    return this.CarService.createBookingSession(body);
   }
 
   @ApiOperation({
